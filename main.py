@@ -3,6 +3,85 @@ import os
 import pandas as pd
 import matplotlib.pyplot as plt
 
+# ----------- COLOR PALETTES
+TRON_BLUE = "#00FFF7"   # Neon blue Tron
+TRON_ORANGE = "#FF9900" # Neon orange
+BG_BLACK = "#181818"    # Deep black
+
+def inject_css(mode):
+    color = TRON_BLUE if mode == "Calendarización" else TRON_ORANGE
+    css = f"""
+    <style>
+    body {{
+        background-color: {BG_BLACK} !important;
+        color: #fff !important;
+    }}
+    .stApp {{
+        background-color: {BG_BLACK};
+        color: #fff;
+    }}
+    .css-1v0mbdj, .css-1dp5vir, .block-container {{
+        background-color: {BG_BLACK} !important;
+        color: #fff !important;
+    }}
+    .stButton>button {{
+        background-color: {color} !important;
+        color: #181818 !important;
+        border: 2px solid #fff !important;
+        border-radius: 10px !important;
+        font-weight: bold !important;
+        transition: box-shadow 0.2s;
+        box-shadow: 0 0 16px 2px {color};
+    }}
+    .stButton>button:hover {{
+        background: #fff !important;
+        color: {color} !important;
+        border: 2px solid {color} !important;
+    }}
+    .stRadio>div>label, .stSelectbox label, .stTextInput label, .stNumberInput label {{
+        color: {color} !important;
+    }}
+    .stDataFrame, .css-1ov1ktq {{
+        background-color: #222 !important;
+        color: #fff !important;
+        border-radius: 12px !important;
+        border: 1.5px solid {color} !important;
+    }}
+    .stDataFrame table tbody tr {{
+        background-color: #222 !important;
+        color: #fff !important;
+    }}
+    .stDataFrame table thead tr th {{
+        color: {color} !important;
+        background: #111 !important;
+    }}
+    .stSelectbox>div>div>div>div>div {{
+        background: #111 !important;
+        color: #fff !important;
+        border: 1.5px solid {color} !important;
+    }}
+    .stNumberInput>div>input {{
+        background: #222 !important;
+        color: {color} !important;
+        border: 1.5px solid {color} !important;
+    }}
+    .css-1v4eu6x, .css-1d391kg, .css-1i3b5e8 {{
+        color: {color} !important;
+    }}
+    .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {{
+        color: {color} !important;
+        text-shadow: 0 0 16px {color};
+    }}
+    .stTabs [data-baseweb="tab"] {{
+        background: #111 !important;
+        color: {color} !important;
+        border: 2px solid {color} !important;
+    }}
+    </style>
+    """
+    st.markdown(css, unsafe_allow_html=True)
+
+
 # --- CONFIGURACIÓN GENERAL
 st.set_page_config(page_title="Simulador de Planificación y Sincronización", layout="wide")
 st.markdown("<style>div.block-container{padding-top:2rem;}</style>", unsafe_allow_html=True)
@@ -87,9 +166,13 @@ def reset_all():
     st.session_state.sync_actions_file = ""
     st.session_state.sync_resources_file = ""
 
+
+
 # --- CABECERA Y SELECCIÓN DE TIPO DE SIMULACIÓN
 st.title("Simulador de Planificación y Sincronización de Procesos")
 col1, col2, col3 = st.columns([2, 2, 1])
+
+
 
 with col1:
     if st.button("Calendarización", type="primary"):
@@ -100,7 +183,9 @@ with col2:
 with col3:
     if st.button("Limpiar", type="secondary"):
         reset_all()
-        st.experimental_rerun()
+        st.rerun()
+
+inject_css(st.session_state.simulation_type)
 
 st.markdown("---")
 
