@@ -50,5 +50,5 @@ def round_robin(processes, quantum):
     for p in processes:
         turnaround = gantt[[g['pid'] for g in gantt].index(p['pid'])]['end'] - p['at']
         waiting.append(turnaround - p['bt'])
-    avg_wait = sum(waiting) / n
+    avg_wait = abs(sum(waiting) / n)
     return gantt, avg_wait

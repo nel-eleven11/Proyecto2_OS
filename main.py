@@ -3,6 +3,15 @@ import os
 import pandas as pd
 import matplotlib.pyplot as plt
 
+from utils.loader import validate_schedule_file, validate_sync_files
+import scheduling.fifo as fifo
+import scheduling.sjf as sjf
+import scheduling.srt as srt
+import scheduling.round_robin as rr
+import scheduling.priority as priority
+import synchronization.mutex as mutex_mod
+import synchronization.semaphore as sem_mod
+
 # ----------- COLOR PALETTES
 TRON_BLUE = "#00FFF7"   # Neon blue Tron
 TRON_ORANGE = "#FF9900" # Neon orange
@@ -166,13 +175,9 @@ def reset_all():
     st.session_state.sync_actions_file = ""
     st.session_state.sync_resources_file = ""
 
-
-
 # --- CABECERA Y SELECCIÓN DE TIPO DE SIMULACIÓN
 st.title("Simulador de Planificación y Sincronización de Procesos")
 col1, col2, col3 = st.columns([2, 2, 1])
-
-
 
 with col1:
     if st.button("Calendarización", type="primary"):
@@ -189,21 +194,18 @@ inject_css(st.session_state.simulation_type)
 
 st.markdown("---")
 
-# --- VISTA DE CALENDARIZACIÓN
+# --------- VISTA DE CALENDARIZACIÓN ---------
 if st.session_state.simulation_type == "Calendarización":
     st.subheader("Simulación de Algoritmos de Calendarización")
-    # Selección de algoritmos
     algorithms = ["FIFO", "SJF", "SRT", "Round Robin", "Priority"]
     st.markdown("**Selecciona algoritmos:**")
     selected = st.multiselect("Algoritmos", algorithms, default=st.session_state.selected_algorithms, key="algos_select")
     st.session_state.selected_algorithms = selected
 
-    # Quantum
     if "Round Robin" in selected:
         quantum = st.number_input("Quantum para Round Robin:", min_value=1, max_value=20, value=st.session_state.quantum, step=1)
         st.session_state.quantum = quantum
 
-    # Archivos de procesos
     schedule_files = get_files_from_dir("./processes/schedule")
     st.markdown("**Selecciona archivo de procesos:**")
     process_file = st.selectbox("Archivo", options=[""] + schedule_files, index=0 if not st.session_state.selected_process_file else schedule_files.index(st.session_state.selected_process_file) + 1)
@@ -213,40 +215,66 @@ if st.session_state.simulation_type == "Calendarización":
     else:
         df_proc = pd.DataFrame(columns=["PID", "BT", "AT", "Priority"])
 
-    # Tabla de procesos
     st.markdown("**Procesos cargados:**")
     st.dataframe(df_proc, hide_index=True, use_container_width=True)
 
-    # Botón de empezar simulación
-    st.button("Empezar simulación", disabled=True)
+    run_simulation = st.button("Empezar simulación", disabled=not(selected and process_file))
 
-    # Diagrama de Gantt (placeholder en blanco)
-    st.markdown("**Visualización de ejecución (Gantt):**")
-    fig, ax = plt.subplots(figsize=(10, 1))
-    ax.set_xlim(0, 10)
-    ax.set_ylim(0, 1)
-    ax.set_axis_off()
-    ax.set_title("Gantt: ejecución pendiente")
-    st.pyplot(fig)
+    sim_outputs = []
+    error = None
+    if run_simulation:
+        filepath = f"./processes/schedule/{process_file}"
+        processes, error = validate_schedule_file(filepath)
+        if error:
+            st.error(f"Error en archivo de procesos: {error}")
+        else:
+            algos_map = {
+                "FIFO": fifo.fifo,
+                "SJF": sjf.sjf,
+                "SRT": srt.srt,
+                "Round Robin": lambda procs: rr.round_robin(procs, st.session_state.quantum),
+                "Priority": priority.priority_scheduling,
+            }
+            for alg in selected:
+                output, avg_wait = algos_map[alg](processes)
+                sim_outputs.append((alg, output, avg_wait))
 
-    # Métricas (placeholder)
-    st.markdown("**Métricas:**")
-    st.info("Aquí aparecerán las métricas de eficiencia cuando la simulación esté implementada.")
+    # Mostrar Gantt y métricas
+    if sim_outputs:
+        for alg, output, avg_wait in sim_outputs:
+            st.markdown(f"### {alg}")
+            # Diagrama de Gantt
+            fig, ax = plt.subplots(figsize=(12, 1.7))
+            colors = plt.cm.get_cmap('tab20')
+            seen = {}
+            for idx, seg in enumerate(output):
+                if seg['pid'] not in seen:
+                    seen[seg['pid']] = len(seen)
+                colidx = seen[seg['pid']]
+                ax.barh(0, seg['end']-seg['start'], left=seg['start'], color=colors(colidx%20), edgecolor='black', height=0.7)
+                ax.text(seg['start'] + (seg['end']-seg['start'])/2, 0, seg['pid'], color="#222", fontsize=12, fontweight='bold', ha='center', va='center')
+            ax.set_xlim(0, max([x['end'] for x in output]) + 1)
+            ax.set_yticks([])
+            ax.set_xlabel("Ciclos")
+            for xc in range(0, max([x['end'] for x in output]) + 1):
+                ax.axvline(x=xc, color="#222", linestyle=':', alpha=0.2)
+            ax.set_title(f"Gantt - {alg}")
+            st.pyplot(fig)
 
-    # Algoritmos seleccionados actualmente
+            st.markdown(f"**Avg Waiting Time:** `{avg_wait:.2f}` ciclos")
+    elif run_simulation and not error:
+        st.info("No hay resultados para mostrar.")
+
     st.markdown(f"**Algoritmos seleccionados actualmente:** {', '.join(selected) if selected else 'Ninguno'}")
 
-
-# --- VISTA DE SINCRONIZACIÓN
+# --------- VISTA DE SINCRONIZACIÓN ---------
 elif st.session_state.simulation_type == "Sincronización":
     st.subheader("Simulación de Mecanismos de Sincronización")
-    # Selección de modo
     st.markdown("**Selecciona modo de sincronización:**")
     sync_modes = ["Mutex", "Semáforo"]
     sync_mode = st.radio("Modo", options=sync_modes, index=sync_modes.index(st.session_state.sync_mode), horizontal=True, key="sync_mode_radio")
     st.session_state.sync_mode = sync_mode
 
-    # Archivos de procesos, recursos y acciones
     sync_proc_files = get_files_from_dir("./processes/sync")
     sync_actions_files = get_files_from_dir("./processes/sync")
     sync_resources_files = get_files_from_dir("./processes/sync")
@@ -264,30 +292,58 @@ elif st.session_state.simulation_type == "Sincronización":
     st.session_state.sync_actions_file = sync_actions_file
     st.session_state.sync_resources_file = sync_resources_file
 
-    # Mostrar tablas de cada archivo
     st.markdown("**Procesos:**")
     df_sync_proc = load_process_file(f"./processes/sync/{sync_proc_file}") if sync_proc_file else pd.DataFrame(columns=["PID", "BT", "AT", "Priority"])
     st.dataframe(df_sync_proc, hide_index=True, use_container_width=True)
-
     st.markdown("**Acciones:**")
     df_sync_act = load_actions_file(f"./processes/sync/{sync_actions_file}") if sync_actions_file else pd.DataFrame(columns=["PID", "ACTION", "RESOURCE", "CYCLE"])
     st.dataframe(df_sync_act, hide_index=True, use_container_width=True)
-
     st.markdown("**Recursos:**")
     df_sync_res = load_resources_file(f"./processes/sync/{sync_resources_file}") if sync_resources_file else pd.DataFrame(columns=["RESOURCE", "COUNT"])
     st.dataframe(df_sync_res, hide_index=True, use_container_width=True)
 
-    # Botón de empezar simulación
-    st.button("Empezar simulación", disabled=True)
+    run_sync_sim = st.button("Empezar simulación", disabled=not(sync_proc_file and sync_actions_file and sync_resources_file))
+    sync_result = None
+    sync_error = None
+    if run_sync_sim:
+        proc_path = f"./processes/sync/{sync_proc_file}"
+        actions_path = f"./processes/sync/{sync_actions_file}"
+        resources_path = f"./processes/sync/{sync_resources_file}"
+        procs, acts, res, sync_error = validate_sync_files(proc_path, actions_path, resources_path)
+        if sync_error:
+            st.error(f"Error en archivos: {sync_error}")
+        else:
+            # Tomar el primer recurso para simular (puedes mejorar para simular varios)
+            rec_name = res[0]['resource']
+            rec_count = res[0]['count']
+            # Preparar acciones en formato para el simulador
+            actions_fmt = []
+            for a in acts:
+                actions_fmt.append([a['pid'], a['action'], a['resource'], int(a['cycle'])])
+            # Simulación:
+            if sync_mode == "Mutex":
+                events = mutex_mod.simulate_mutex(procs, actions_fmt, rec_name)
+            else:
+                events = sem_mod.simulate_semaphore(procs, actions_fmt, rec_name, rec_count)
+            # Visualización
+            st.markdown(f"### Acceso al recurso `{rec_name}`")
+            fig, ax = plt.subplots(figsize=(12, 1.7))
+            col_access = "#30ff87"  # verde neón
+            col_wait = TRON_ORANGE if sync_mode == "Semáforo" else "#FF3333"
+            y = 0
+            for ev in events:
+                color = col_access if ev['status'] == "ACCESSED" else col_wait
+                ax.barh(y, 1, left=ev['cycle'], color=color, edgecolor='#111', height=0.7)
+                ax.text(ev['cycle']+0.5, y, f"{ev['pid']} ({ev['status']})", color="black" if ev['status'] == "ACCESSED" else "#fff", fontsize=11, ha='center', va='center', weight='bold')
+            if events:
+                ax.set_xlim(0, max(ev['cycle'] for ev in events) + 2)
+            ax.set_yticks([])
+            ax.set_xlabel("Ciclos")
+            for xc in range(0, max(ev['cycle'] for ev in events)+2):
+                ax.axvline(x=xc, color="#222", linestyle=':', alpha=0.2)
+            ax.set_title(f"Diagrama de acceso/espera al recurso {rec_name}")
+            st.pyplot(fig)
 
-    # Diagrama de timeline (placeholder en blanco)
-    st.markdown("**Visualización dinámica de acceso a recursos:**")
-    fig, ax = plt.subplots(figsize=(10, 1))
-    ax.set_xlim(0, 10)
-    ax.set_ylim(0, 1)
-    ax.set_axis_off()
-    ax.set_title("Acceso a recursos: ejecución pendiente")
-    st.pyplot(fig)
-
-    st.info("Aquí aparecerán los eventos y el estado de los recursos cuando la simulación esté implementada.")
-
+            st.success("Simulación completada correctamente.")
+    elif run_sync_sim and not sync_error:
+        st.info("No hay resultados para mostrar.")
