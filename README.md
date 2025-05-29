@@ -6,7 +6,7 @@ Proyecto 2 de Sistemas Operativos - Simulador
 # Simulador de Planificación y Sincronización de Procesos
 
 **Autor:**  
-[Tu nombre aquí]
+Nelson García Bravatti
 
 ## Descripción
 
@@ -19,9 +19,10 @@ Incluye una interfaz visual moderna inspirada en TRON, desarrollada en Python us
 
 - Python 3.8 o superior
 - Instalar dependencias:
-  ```bash
-  pip install -r requirements.txt
-  ```
+
+```bash
+pip install -r requirements.txt
+```
 Dependencias principales:
 
 - streamlit
@@ -33,8 +34,8 @@ Dependencias principales:
 Clona el repositorio:
 
 ```bash
-git clone <URL_DE_TU_REPOSITORIO>
-cd <nombre_del_proyecto>
+git clone <https://github.com/nel-eleven11/Proyecto2_OS>
+cd <Proyecto2_OS>
 ```
 
 Ejecuta la aplicación:
@@ -47,7 +48,6 @@ streamlit run main.py
 
 ```bash
 .
-├── assets/
 ├── processes/
 │   ├── schedule/    # Archivos de procesos para calendarización
 │   └── sync/        # Archivos para sincronización
