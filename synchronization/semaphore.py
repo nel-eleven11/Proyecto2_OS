@@ -17,15 +17,16 @@ class Semaphore:
         else:
             self.value += 1
 
-def simulate_semaphore(processes, actions, recurso, contador):
-    semaphore = Semaphore(contador)
-    events = []
-    for action in actions:
-        pid, act, rec, cycle = action
-        if rec == recurso:
-            if semaphore.wait(pid):
-                events.append({'pid': pid, 'status': 'ACCESSED', 'cycle': cycle})
-                semaphore.signal()
-            else:
-                events.append({'pid': pid, 'status': 'WAITING', 'cycle': cycle})
-    return events
+def simulate_semaphore(processes, actions, recursos):
+    resource_semaphores = {r['resource']: Semaphore(r['count']) for r in recursos}
+    timeline = []
+    actions_sorted = sorted(actions, key=lambda x: int(x[3]))
+    for a in actions_sorted:
+        pid, act, rec, cycle = a
+        sem = resource_semaphores[rec]
+        if sem.wait(pid):
+            timeline.append({'pid': pid, 'resource': rec, 'cycle': int(cycle), 'status': 'ACCESSED'})
+            sem.signal()
+        else:
+            timeline.append({'pid': pid, 'resource': rec, 'cycle': int(cycle), 'status': 'WAITING'})
+    return timeline

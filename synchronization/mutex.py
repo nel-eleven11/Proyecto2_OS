@@ -11,17 +11,19 @@ class Mutex:
     def release(self):
         self.locked = False
 
-# Simulación de procesos accediendo a un recurso con Mutex
-def simulate_mutex(processes, actions, recurso):
-    mutex = Mutex()
-    events = []
-    for action in actions:
-        pid, act, rec, cycle = action
-        if rec == recurso:
-            if act == 'WRITE' or act == 'READ':
-                if mutex.acquire():
-                    events.append({'pid': pid, 'status': 'ACCESSED', 'cycle': cycle})
-                    mutex.release()
-                else:
-                    events.append({'pid': pid, 'status': 'WAITING', 'cycle': cycle})
-    return events
+def simulate_mutex(processes, actions, recursos):
+    # recursos: lista de {'resource': nombre, 'count': int}  (el count es ignorado para mutex)
+    resource_mutexes = {r['resource']: Mutex() for r in recursos}
+    timeline = []  # [ {'pid', 'resource', 'cycle', 'status'} ... ]
+    actions_sorted = sorted(actions, key=lambda x: int(x[3]))  # sort by cycle
+
+    for a in actions_sorted:
+        pid, act, rec, cycle = a
+        mutex = resource_mutexes[rec]
+        # Simula solo para ese ciclo
+        if mutex.acquire():
+            timeline.append({'pid': pid, 'resource': rec, 'cycle': int(cycle), 'status': 'ACCESSED'})
+            mutex.release()
+        else:
+            timeline.append({'pid': pid, 'resource': rec, 'cycle': int(cycle), 'status': 'WAITING'})
+    return timeline

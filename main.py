@@ -2,6 +2,7 @@ import streamlit as st
 import os
 import pandas as pd
 import matplotlib.pyplot as plt
+import time
 
 from utils.loader import validate_schedule_file, validate_sync_files
 import scheduling.fifo as fifo
@@ -17,15 +18,25 @@ TRON_BLUE = "#00FFF7"   # Neon blue Tron
 TRON_ORANGE = "#FF9900" # Neon orange
 BG_BLACK = "#181818"    # Deep black
 
+# ----------- FONT ----------- #
 def inject_css(mode):
     color = TRON_BLUE if mode == "Calendarización" else TRON_ORANGE
+    font_url = "https://fonts.googleapis.com/css?family=Orbitron:wght@700&display=swap"
+    st.markdown(f'<link href="{font_url}" rel="stylesheet">', unsafe_allow_html=True)
     css = f"""
     <style>
+    html, body, [class*="css"], .stApp, .block-container, .stTextInput, .stNumberInput, .stDataFrame, .stButton, .stRadio, .stSelectbox,
+    .stMarkdown, .stSlider, .stHeader, .stSubheader, .stTitle, .stCaption, .stExpander, .stTable, .stTabs, .stCheckbox, .stForm, .stTextArea,
+    .stColumn, .stFileUploader, .stMetric, .stAlert, .stSidebar, .stPopover {{
+        font-family: 'Orbitron', 'Arial', 'Helvetica', sans-serif !important;
+        letter-spacing: 2px;
+        color: #fff !important;
+    }}
     body {{
         background-color: {BG_BLACK} !important;
         color: #fff !important;
     }}
-    .stApp {{
+    .stApp, .block-container {{
         background-color: {BG_BLACK};
         color: #fff;
     }}
@@ -38,67 +49,77 @@ def inject_css(mode):
         color: #181818 !important;
         border: 2px solid #fff !important;
         border-radius: 10px !important;
+        font-family: 'Orbitron', 'Arial', 'Helvetica', sans-serif !important;
         font-weight: bold !important;
-        transition: box-shadow 0.2s;
+        font-size: 1.18rem !important;
         box-shadow: 0 0 16px 2px {color};
+        letter-spacing: 2px;
     }}
     .stButton>button:hover {{
         background: #fff !important;
         color: {color} !important;
         border: 2px solid {color} !important;
+        font-family: 'Orbitron', 'Arial', 'Helvetica', sans-serif !important;
     }}
     .stRadio>div>label, .stSelectbox label, .stTextInput label, .stNumberInput label {{
         color: {color} !important;
+        font-family: 'Orbitron', 'Arial', 'Helvetica', sans-serif !important;
     }}
     .stDataFrame, .css-1ov1ktq {{
         background-color: #222 !important;
         color: #fff !important;
         border-radius: 12px !important;
         border: 1.5px solid {color} !important;
+        font-family: 'Orbitron', 'Arial', 'Helvetica', sans-serif !important;
     }}
     .stDataFrame table tbody tr {{
         background-color: #222 !important;
         color: #fff !important;
+        font-family: 'Orbitron', 'Arial', 'Helvetica', sans-serif !important;
     }}
     .stDataFrame table thead tr th {{
         color: {color} !important;
         background: #111 !important;
+        font-family: 'Orbitron', 'Arial', 'Helvetica', sans-serif !important;
     }}
     .stSelectbox>div>div>div>div>div {{
         background: #111 !important;
         color: #fff !important;
         border: 1.5px solid {color} !important;
+        font-family: 'Orbitron', 'Arial', 'Helvetica', sans-serif !important;
     }}
     .stNumberInput>div>input {{
         background: #222 !important;
         color: {color} !important;
         border: 1.5px solid {color} !important;
+        font-family: 'Orbitron', 'Arial', 'Helvetica', sans-serif !important;
     }}
     .css-1v4eu6x, .css-1d391kg, .css-1i3b5e8 {{
         color: {color} !important;
     }}
     .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {{
         color: {color} !important;
-        text-shadow: 0 0 16px {color};
+        font-family: 'Orbitron', 'Arial', 'Helvetica', sans-serif !important;
+        text-shadow: 0 0 18px {color}, 0 0 2px #fff;
+        letter-spacing: 2.5px;
     }}
-    .stTabs [data-baseweb="tab"] {{
-        background: #111 !important;
-        color: {color} !important;
-        border: 2px solid {color} !important;
+    .tron-selected {{
+        color: {TRON_BLUE};
+        font-family: 'Orbitron', 'Arial', 'Helvetica', sans-serif !important;
+        text-shadow: 0 0 16px {TRON_BLUE};
+        font-size: 1.08rem;
+        letter-spacing: 2px;
     }}
     </style>
     """
     st.markdown(css, unsafe_allow_html=True)
 
-
 # --- CONFIGURACIÓN GENERAL
-st.set_page_config(page_title="Simulador de Planificación y Sincronización", layout="wide")
-st.markdown("<style>div.block-container{padding-top:2rem;}</style>", unsafe_allow_html=True)
+st.set_page_config(page_title="Simulador de Mecanismos de Sincronización y Algoritmos de Calendarización", layout="wide")
+st.markdown("<style>div.block-container{{padding-top:2rem;}}</style>", unsafe_allow_html=True)
 
 # --- FUNCIONES AUXILIARES PARA LEER LOS ARCHIVOS
-
 def get_files_from_dir(path, ext=".txt"):
-    """Devuelve una lista de archivos de un directorio con la extensión deseada."""
     try:
         files = [f for f in os.listdir(path) if f.endswith(ext)]
         return files
@@ -106,7 +127,6 @@ def get_files_from_dir(path, ext=".txt"):
         return []
 
 def load_process_file(filepath):
-    """Carga archivo de procesos y devuelve DataFrame."""
     try:
         data = []
         with open(filepath, "r") as f:
@@ -145,7 +165,6 @@ def load_resources_file(filepath):
     except Exception:
         return pd.DataFrame(columns=["RESOURCE", "COUNT"])
 
-
 # --- ESTADOS GLOBALES
 if "simulation_type" not in st.session_state:
     st.session_state.simulation_type = "Calendarización"
@@ -176,9 +195,10 @@ def reset_all():
     st.session_state.sync_resources_file = ""
 
 # --- CABECERA Y SELECCIÓN DE TIPO DE SIMULACIÓN
-st.title("Simulador de Planificación y Sincronización de Procesos")
-col1, col2, col3 = st.columns([2, 2, 1])
 
+st.title("Simulador de Mecanismos de Sincronización y  Algoritmos de Calendarización")
+
+col1, col2, col3 = st.columns([2, 2, 1])
 with col1:
     if st.button("Calendarización", type="primary"):
         st.session_state.simulation_type = "Calendarización"
@@ -192,14 +212,26 @@ with col3:
 
 inject_css(st.session_state.simulation_type)
 
+
 st.markdown("---")
 
 # --------- VISTA DE CALENDARIZACIÓN ---------
 if st.session_state.simulation_type == "Calendarización":
     st.subheader("Simulación de Algoritmos de Calendarización")
     algorithms = ["FIFO", "SJF", "SRT", "Round Robin", "Priority"]
+
+    # Algoritmos: visual cards
     st.markdown("**Selecciona algoritmos:**")
-    selected = st.multiselect("Algoritmos", algorithms, default=st.session_state.selected_algorithms, key="algos_select")
+    selected = st.session_state.selected_algorithms if "selected_algorithms" in st.session_state else []
+    algo_cols = st.columns(len(algorithms))
+    for i, alg in enumerate(algorithms):
+        key = f"alg_card_{alg}"
+        if alg in selected:
+            if algo_cols[i].button(f"{alg} ✔", key=key, help="Click para quitar", args=(alg,)):
+                selected.remove(alg)
+        else:
+            if algo_cols[i].button(alg, key=key, help="Click para seleccionar", args=(alg,)):
+                selected.append(alg)
     st.session_state.selected_algorithms = selected
 
     if "Round Robin" in selected:
@@ -243,37 +275,48 @@ if st.session_state.simulation_type == "Calendarización":
     if sim_outputs:
         for alg, output, avg_wait in sim_outputs:
             st.markdown(f"### {alg}")
-            # Diagrama de Gantt
-            fig, ax = plt.subplots(figsize=(12, 1.7))
-            colors = plt.cm.get_cmap('tab20')
-            seen = {}
-            for idx, seg in enumerate(output):
-                if seg['pid'] not in seen:
-                    seen[seg['pid']] = len(seen)
-                colidx = seen[seg['pid']]
-                ax.barh(0, seg['end']-seg['start'], left=seg['start'], color=colors(colidx%20), edgecolor='black', height=0.7)
-                ax.text(seg['start'] + (seg['end']-seg['start'])/2, 0, seg['pid'], color="#222", fontsize=12, fontweight='bold', ha='center', va='center')
-            ax.set_xlim(0, max([x['end'] for x in output]) + 1)
-            ax.set_yticks([])
-            ax.set_xlabel("Ciclos")
-            for xc in range(0, max([x['end'] for x in output]) + 1):
-                ax.axvline(x=xc, color="#222", linestyle=':', alpha=0.2)
-            ax.set_title(f"Gantt - {alg}")
-            st.pyplot(fig)
-
+            max_end = max([x['end'] for x in output])
+            gantt_placeholder = st.empty()
+            for t in range(0, max_end+1):
+                fig, ax = plt.subplots(figsize=(12, 1.7))
+                colors = plt.cm.get_cmap('tab20')
+                seen = {}
+                for idx, seg in enumerate(output):
+                    if seg['start'] <= t:
+                        if seg['pid'] not in seen:
+                            seen[seg['pid']] = len(seen)
+                        colidx = seen[seg['pid']]
+                        draw_end = min(t, seg['end'])
+                        if draw_end > seg['start']:
+                            ax.barh(0, draw_end-seg['start'], left=seg['start'], color=colors(colidx%20), edgecolor='black', height=0.7)
+                            ax.text(seg['start'] + (draw_end-seg['start'])/2, 0, seg['pid'], color="#222", fontsize=12, fontweight='bold', ha='center', va='center')
+                ax.set_xlim(0, max_end + 1)
+                ax.set_yticks([])
+                ax.set_xlabel("Ciclos")
+                for xc in range(0, max_end + 1):
+                    ax.axvline(x=xc, color="#222", linestyle=':', alpha=0.2)
+                ax.set_title(f"Gantt - {alg}")
+                gantt_placeholder.pyplot(fig)
+                time.sleep(0.4)
             st.markdown(f"**Avg Waiting Time:** `{avg_wait:.2f}` ciclos")
     elif run_simulation and not error:
         st.info("No hay resultados para mostrar.")
 
-    st.markdown(f"**Algoritmos seleccionados actualmente:** {', '.join(selected) if selected else 'Ninguno'}")
+    # Mostrar algoritmos seleccionados con fuente y color TRON
+    st.markdown('<div class="tron-selected">Algoritmos seleccionados actualmente: ' +
+                (", ".join(selected) if selected else "Ninguno") + '</div>', unsafe_allow_html=True)
 
 # --------- VISTA DE SINCRONIZACIÓN ---------
 elif st.session_state.simulation_type == "Sincronización":
     st.subheader("Simulación de Mecanismos de Sincronización")
     st.markdown("**Selecciona modo de sincronización:**")
-    sync_modes = ["Mutex", "Semáforo"]
-    sync_mode = st.radio("Modo", options=sync_modes, index=sync_modes.index(st.session_state.sync_mode), horizontal=True, key="sync_mode_radio")
-    st.session_state.sync_mode = sync_mode
+    # Botones estilo toggle para Mutex/Semáforo
+    mode_cols = st.columns(2)
+    if mode_cols[0].button("Mutex 🔒", key="mutex_btn", help="Simulación con Mutex"):
+        st.session_state.sync_mode = "Mutex"
+    if mode_cols[1].button("Semáforo 🚦", key="semaforo_btn", help="Simulación con Semáforo"):
+        st.session_state.sync_mode = "Semáforo"
+    sync_mode = st.session_state.sync_mode
 
     sync_proc_files = get_files_from_dir("./processes/sync")
     sync_actions_files = get_files_from_dir("./processes/sync")
@@ -313,37 +356,39 @@ elif st.session_state.simulation_type == "Sincronización":
         if sync_error:
             st.error(f"Error en archivos: {sync_error}")
         else:
-            # Tomar el primer recurso para simular (puedes mejorar para simular varios)
-            rec_name = res[0]['resource']
-            rec_count = res[0]['count']
-            # Preparar acciones en formato para el simulador
             actions_fmt = []
             for a in acts:
                 actions_fmt.append([a['pid'], a['action'], a['resource'], int(a['cycle'])])
-            # Simulación:
             if sync_mode == "Mutex":
-                events = mutex_mod.simulate_mutex(procs, actions_fmt, rec_name)
+                events = mutex_mod.simulate_mutex(procs, actions_fmt, res)
             else:
-                events = sem_mod.simulate_semaphore(procs, actions_fmt, rec_name, rec_count)
-            # Visualización
-            st.markdown(f"### Acceso al recurso `{rec_name}`")
-            fig, ax = plt.subplots(figsize=(12, 1.7))
-            col_access = "#30ff87"  # verde neón
-            col_wait = TRON_ORANGE if sync_mode == "Semáforo" else "#FF3333"
-            y = 0
-            for ev in events:
-                color = col_access if ev['status'] == "ACCESSED" else col_wait
-                ax.barh(y, 1, left=ev['cycle'], color=color, edgecolor='#111', height=0.7)
-                ax.text(ev['cycle']+0.5, y, f"{ev['pid']} ({ev['status']})", color="black" if ev['status'] == "ACCESSED" else "#fff", fontsize=11, ha='center', va='center', weight='bold')
+                events = sem_mod.simulate_semaphore(procs, actions_fmt, res)
             if events:
-                ax.set_xlim(0, max(ev['cycle'] for ev in events) + 2)
-            ax.set_yticks([])
-            ax.set_xlabel("Ciclos")
-            for xc in range(0, max(ev['cycle'] for ev in events)+2):
-                ax.axvline(x=xc, color="#222", linestyle=':', alpha=0.2)
-            ax.set_title(f"Diagrama de acceso/espera al recurso {rec_name}")
-            st.pyplot(fig)
-
-            st.success("Simulación completada correctamente.")
+                st.markdown("### Diagrama animado de acceso a recursos")
+                max_cycle = max(e['cycle'] for e in events)
+                resource_names = [r['resource'] for r in res]
+                gantt_placeholder = st.empty()
+                for t in range(0, max_cycle + 1):
+                    fig, ax = plt.subplots(figsize=(12, max(1.7, len(resource_names)*0.9)))
+                    for idx, resource in enumerate(resource_names):
+                        subevents = [e for e in events if e['resource'] == resource and e['cycle'] <= t]
+                        for e in subevents:
+                            color = "#30ff87" if e['status'] == "ACCESSED" else (TRON_ORANGE if sync_mode == "Semáforo" else "#FF3333")
+                            ax.barh(idx, 1, left=e['cycle'], color=color, edgecolor='#111', height=0.7)
+                            ax.text(e['cycle'] + 0.5, idx, f"{e['pid']} ({e['status']})",
+                                    color="black" if e['status']=="ACCESSED" else "#fff",
+                                    fontsize=7, ha='center', va='center', weight='bold')
+                    ax.set_xlim(0, max_cycle + 2)
+                    ax.set_yticks(range(len(resource_names)))
+                    ax.set_yticklabels(resource_names)
+                    ax.set_xlabel("Ciclos")
+                    for xc in range(0, max_cycle + 2):
+                        ax.axvline(x=xc, color="#222", linestyle=':', alpha=0.15)
+                    ax.set_title("Recursos (filas) y sus accesos por ciclo")
+                    gantt_placeholder.pyplot(fig)
+                    time.sleep(0.4)
+                st.success("Simulación completada.")
+            else:
+                st.info("No hay eventos para mostrar.")
     elif run_sync_sim and not sync_error:
         st.info("No hay resultados para mostrar.")
