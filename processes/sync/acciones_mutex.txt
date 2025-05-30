@@ -1,0 +1,16 @@
+P1,read,R1,0
+P2,read,R1,0
+P3,write,R1,1
+P4,read,R1,1
+P5,read,R1,2
+P6,write,R1,3
+P1,read,R2,4
+P3,write,R2,4
+P4,read,R2,5
+P2,read,R2,5
+P6,write,R2,6
+P5,read,R2,7
+P1,write,R3,8
+P2,read,R3,8
+P3,read,R3,9
+P4,write,R3,10

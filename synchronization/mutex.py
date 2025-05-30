@@ -1,29 +1,94 @@
 class Mutex:
-    def __init__(self):
-        self.locked = False
+    def __init__(self, count=1):
+        self.max_count = count
+        self.current_count = count
+        self.owners = []
+        self.waiting_queue = []
+        self.original_priorities = {}
 
-    def acquire(self):
-        if not self.locked:
-            self.locked = True
+    def acquire(self, process):
+        if self.current_count > 0:
+            self.current_count -= 1
+            self.owners.append(process['pid'])
             return True
-        return False
-
-    def release(self):
-        self.locked = False
-
-def simulate_mutex(processes, actions, recursos):
-    # recursos: lista de {'resource': nombre, 'count': int}  (el count es ignorado para mutex)
-    resource_mutexes = {r['resource']: Mutex() for r in recursos}
-    timeline = []  # [ {'pid', 'resource', 'cycle', 'status'} ... ]
-    actions_sorted = sorted(actions, key=lambda x: int(x[3]))  # sort by cycle
-
-    for a in actions_sorted:
-        pid, act, rec, cycle = a
-        mutex = resource_mutexes[rec]
-        # Simula solo para ese ciclo
-        if mutex.acquire():
-            timeline.append({'pid': pid, 'resource': rec, 'cycle': int(cycle), 'status': 'ACCESSED'})
-            mutex.release()
         else:
-            timeline.append({'pid': pid, 'resource': rec, 'cycle': int(cycle), 'status': 'WAITING'})
-    return timeline
+            # Aplicar herencia de prioridad si es necesario
+            for owner in self.owners:
+                if process['priority'] > process_map[owner]['priority']:
+                    self.original_priorities[owner] = process_map[owner]['priority']
+                    process_map[owner]['priority'] = process['priority']
+            self.waiting_queue.append(process['pid'])
+            return False
+
+    def release(self, process):
+        if process['pid'] in self.owners:
+            self.owners.remove(process['pid'])
+            # Restaurar prioridad si fue modificada
+            if process['pid'] in self.original_priorities:
+                process_map[process['pid']]['priority'] = self.original_priorities[process['pid']]
+                del self.original_priorities[process['pid']]
+            
+            self.current_count += 1
+            # Asignar el recurso a procesos en espera (por prioridad)
+            if self.waiting_queue:
+                next_pid = max(self.waiting_queue, key=lambda pid: process_map[pid]['priority'])
+                self.waiting_queue.remove(next_pid)
+                self.owners.append(next_pid)
+                self.current_count -= 1
+                return next_pid
+        return None
+
+def simulate_mutex(processes, actions, resources):
+    events = []
+    global process_map
+    process_map = {p['pid']: p.copy() for p in processes}
+    
+    # Crear mutexes con el count especificado en resources
+    mutexes = {}
+    for r in resources:
+        mutexes[r['resource']] = Mutex(count=int(r['count']))
+    
+    process_resources = {p['pid']: [] for p in processes}
+    actions = sorted(actions, key=lambda x: (x[3], -process_map[x[0]]['priority']))
+
+    for act in actions:
+        pid, action, resource, cycle = act
+        proc = process_map[pid]
+        mtx = mutexes[resource]
+
+        # Verificar si el proceso ya tiene el recurso
+        if resource in process_resources[pid]:
+            # Liberar el recurso
+            mtx.release(proc)
+            process_resources[pid].remove(resource)
+            events.append({
+                'pid': pid,
+                'priority': proc['priority'],
+                'cycle': cycle,
+                'resource': resource,
+                'action': action,
+                'status': 'RELEASED'
+            })
+        else:
+            # Intentar adquirir el recurso
+            if mtx.acquire(proc):
+                process_resources[pid].append(resource)
+                events.append({
+                    'pid': pid,
+                    'priority': proc['priority'],
+                    'cycle': cycle,
+                    'resource': resource,
+                    'action': action,
+                    'status': 'ACCESSED'
+                })
+            else:
+                events.append({
+                    'pid': pid,
+                    'priority': proc['priority'],
+                    'cycle': cycle,
+                    'resource': resource,
+                    'action': action,
+                    'status': 'WAITING'
+                })
+
+    return events

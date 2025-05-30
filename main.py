@@ -311,12 +311,48 @@ elif st.session_state.simulation_type == "Sincronización":
     st.subheader("Simulación de Mecanismos de Sincronización")
     st.markdown("**Selecciona modo de sincronización:**")
     # Botones estilo toggle para Mutex/Semáforo
-    mode_cols = st.columns(2)
-    if mode_cols[0].button("Mutex 🔒", key="mutex_btn", help="Simulación con Mutex"):
-        st.session_state.sync_mode = "Mutex"
-    if mode_cols[1].button("Semáforo 🚦", key="semaforo_btn", help="Simulación con Semáforo"):
-        st.session_state.sync_mode = "Semáforo"
     sync_mode = st.session_state.sync_mode
+    
+    # Crear columnas para el layout
+    mode_col1, mode_col2, indicator_col = st.columns([2, 2, 3])
+    
+    with mode_col1:
+        if st.button("Mutex 🔒", key="mutex_btn", help="Simulación con Mutex"):
+            st.session_state.sync_mode = "Mutex"
+            st.rerun()
+    
+    with mode_col2:
+        if st.button("Semáforo 🚦", key="semaforo_btn", help="Simulación con Semáforo"):
+            st.session_state.sync_mode = "Semáforo"
+            st.rerun()
+    
+    with indicator_col:
+        # Estilo CSS para el indicador
+        st.markdown("""
+        <style>
+        .sync-indicator {
+            border: 2px solid #00FFF7;
+            border-radius: 10px;
+            padding: 10px;
+            text-align: center;
+            background-color: #181818;
+            box-shadow: 0 0 10px #00FFF7;
+            margin-top: 10px;
+        }
+        .sync-indicator h3 {
+            color: #00FFF7;
+            margin: 0;
+            font-family: 'Orbitron', sans-serif;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+        
+        # Mostrar el indicador
+        st.markdown(f"""
+        <div class="sync-indicator">
+            <h3>Algoritmo seleccionado: {sync_mode}</h3>
+        </div>
+        """, unsafe_allow_html=True)
 
     sync_proc_files = get_files_from_dir("./processes/sync")
     sync_actions_files = get_files_from_dir("./processes/sync")
@@ -364,31 +400,49 @@ elif st.session_state.simulation_type == "Sincronización":
             else:
                 events = sem_mod.simulate_semaphore(procs, actions_fmt, res)
             if events:
-                st.markdown("### Diagrama animado de acceso a recursos")
+                st.markdown("### Diagrama animado de acceso a recursos (Herencia de Prioridad)")
+                process_list = sorted({e['pid'] for e in events}, key=lambda pid: -next(p['priority'] for p in procs if p['pid'] == pid))
+                process_idx = {pid: i for i, pid in enumerate(process_list)}
                 max_cycle = max(e['cycle'] for e in events)
-                resource_names = [r['resource'] for r in res]
                 gantt_placeholder = st.empty()
+                
                 for t in range(0, max_cycle + 1):
-                    fig, ax = plt.subplots(figsize=(12, max(1.7, len(resource_names)*0.9)))
-                    for idx, resource in enumerate(resource_names):
-                        subevents = [e for e in events if e['resource'] == resource and e['cycle'] <= t]
-                        for e in subevents:
-                            color = "#30ff87" if e['status'] == "ACCESSED" else (TRON_ORANGE if sync_mode == "Semáforo" else "#FF3333")
-                            ax.barh(idx, 1, left=e['cycle'], color=color, edgecolor='#111', height=0.7)
-                            ax.text(e['cycle'] + 0.5, idx, f"{e['pid']} ({e['status']})",
-                                    color="black" if e['status']=="ACCESSED" else "#fff",
-                                    fontsize=7, ha='center', va='center', weight='bold')
-                    ax.set_xlim(0, max_cycle + 2)
-                    ax.set_yticks(range(len(resource_names)))
-                    ax.set_yticklabels(resource_names)
+                    fig, ax = plt.subplots(figsize=(14, max(1.7, len(process_list)*0.7)))
+                    for ev in events:
+                        if ev['cycle'] <= t:
+                            y = process_idx[ev['pid']]
+                            # Definir colores de fondo según estado
+                            if ev['status'] == "ACCESSED":
+                                color = "#30ff87"  # Verde para acceso
+                            elif ev['status'] == "RELEASED":
+                                color = "#ff3030"  # Rojo para liberación
+                            else:
+                                color = TRON_ORANGE  # Naranja para espera
+                            
+                            # Dibujar la barra
+                            ax.barh(y, 1, left=ev['cycle'], color=color, edgecolor='#111', height=0.65)
+                            
+                            # Texto siempre en negro con fondo blanco para mejor legibilidad
+                            ax.text(ev['cycle']+0.5, y, 
+                                f"{ev['resource']} {ev['action']} ({ev['status']})", 
+                                color='black',  # Texto siempre negro
+                                fontsize=6, 
+                                ha='center', 
+                                va='center', 
+                                weight='bold',
+                                bbox=dict(facecolor='white', alpha=0.7, edgecolor='none', pad=1))
+                    
+                    ax.set_yticks(range(len(process_list)))
+                    ax.set_yticklabels(process_list)
                     ax.set_xlabel("Ciclos")
-                    for xc in range(0, max_cycle + 2):
-                        ax.axvline(x=xc, color="#222", linestyle=':', alpha=0.15)
-                    ax.set_title("Recursos (filas) y sus accesos por ciclo")
+                    ax.set_xlim(0, max_cycle+2)
+                    
+                    # Líneas verticales de guía
+                    for xc in range(0, max_cycle+2):
+                        ax.axvline(x=xc, color="#222", linestyle=':', alpha=0.13)
+                    
+                    ax.set_title("Procesos ordenados por prioridad (mayor arriba)")
                     gantt_placeholder.pyplot(fig)
                     time.sleep(0.4)
-                st.success("Simulación completada.")
-            else:
-                st.info("No hay eventos para mostrar.")
     elif run_sync_sim and not sync_error:
         st.info("No hay resultados para mostrar.")
